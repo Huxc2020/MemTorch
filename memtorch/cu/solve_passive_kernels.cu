@@ -197,14 +197,21 @@ __global__ void gen_CDE_kernel(
 
 __global__ void
 det_sf_kernel(float *tensor, int numel, int bits, float overflow_rate, float* sf) {
-  float *tensor_copy;
-  tensor_copy = (float *)malloc(numel * sizeof(float));
-  #pragma unroll 4
-  for (int i = 0; i < numel; i++) {
-    tensor_copy[i] = tensor[i];
+  // Allocate shared memory for better performance and avoid malloc/free in kernel
+  extern __shared__ float shared_tensor[];
+  
+  // Copy data to shared memory with multiple threads
+  for (int i = threadIdx.x + blockIdx.x * blockDim.x; i < numel; i += blockDim.x * gridDim.x) {
+    if (i < numel) {
+      shared_tensor[i] = tensor[i];
+    }
   }
-  sf[0] = det_sf(tensor_copy, numel, bits, overflow_rate, NULL, NULL);
-  free(tensor_copy);
+  __syncthreads();
+  
+  // Only one thread calculates sf to avoid race conditions
+  if (threadIdx.x == 0 && blockIdx.x == 0) {
+    sf[0] = det_sf(shared_tensor, numel, bits, overflow_rate, NULL, NULL);
+  }
 }
 
 __global__ void
@@ -319,7 +326,10 @@ at::Tensor solve_passive(at::Tensor conductance_matrix, at::Tensor V_WL,
       float *I_tensor_accessor = I_tensor.data_ptr<float>();
       float *sf;
       cudaMalloc(&sf, sizeof(float));
-      det_sf_kernel<<<dim3(1, 1, 1), dim3(1, 1, 1)>>>(I_tensor_accessor, n, ADC_resolution, overflow_rate, sf);
+      // Launch kernel with shared memory for tensor copy
+      size_t shared_mem_size = n * sizeof(float);
+      int block_size = min(256, n);
+      det_sf_kernel<<<1, block_size, shared_mem_size>>>(I_tensor_accessor, n, ADC_resolution, overflow_rate, sf);
       cudaSafeCall(cudaDeviceSynchronize());
       int numSMs;
       cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
