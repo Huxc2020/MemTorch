@@ -1,0 +1,74 @@
+diff --git a/memtorch/cu/tile_matmul_kernels.cu b/memtorch/cu/tile_matmul_kernels.cu
+index 1234567..abcdefg 100644
+--- a/memtorch/cu/tile_matmul_kernels.cu
++++ b/memtorch/cu/tile_matmul_kernels.cu
+@@ -44,7 +44,8 @@ __global__ void tile_matmul_kernel(
+     for (int ii = 0; ii < partial_sum.size(); ii++) {
+       result[transform_2d_index(i, j * mat_b_tiles_shape[2] + ii,
+                                 mat_b_shape_back)] += partial_sum[ii];
+     }
+-    free(&partial_sum);
++    // FIXED: Removed incorrect free() of stack-allocated Eigen object
++    // partial_sum is automatically destroyed when going out of scope
+   }
+ }
+ 
+@@ -80,7 +81,8 @@ __global__ void tile_matmul_kernel(
+     for (int ii = 0; ii < partial_sum.size(); ii++) {
+       result[transform_2d_index(i, j * mat_b_tiles_shape[2] + ii,
+                                 mat_b_shape_back)] += partial_sum[ii];
+     }
+-    free(&partial_sum);
++    // FIXED: Removed incorrect free() of stack-allocated Eigen object
++    // partial_sum is automatically destroyed when going out of scope
+   }
+ }
+
+diff --git a/setup.py b/setup.py
+index 1234567..abcdefg 100644
+--- a/setup.py
++++ b/setup.py
+@@ -44,7 +44,15 @@ if CUDA:
+                     "memtorch/submodules/eigen/",
+                 ]
+             ],
+-            extra_compile_args=["-lineinfo", "-use_fast_math"],
++            extra_compile_args={
++                'cxx': ['-std=c++14', '-O3'],
++                'nvcc': [
++                    '-std=c++14',
++                    '-lineinfo',
++                    '-use_fast_math',
++                    '--expt-relaxed-constexpr',
++                ]
++            },
+         ),
+         CppExtension(
+             name="memtorch_bindings",
+@@ -55,7 +63,7 @@ if CUDA:
+                     "memtorch/submodules/eigen/",
+                 ]
+             ],
+-            extra_compile_args=["-O3"],
++            extra_compile_args=["-std=c++14", "-O3"],
+         ),
+     ]
+     name = "memtorch"
+@@ -75,7 +83,7 @@ else:
+                     "memtorch/submodules/eigen/",
+                 ]
+             ],
+-            extra_compile_args=["-O3"],
++            extra_compile_args=["-std=c++14", "-O3"],
+         )
+     ]
+     name = "memtorch-cpu"
+@@ -96,7 +104,7 @@ if __name__ == "__main__":
+             "numpy",
+             "pandas",
+             "scipy",
+-            "sklearn",
++            "scikit-learn",
+             "torch>=1.2.0",
+             "torchvision",
+             "matplotlib",
