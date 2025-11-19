@@ -191,6 +191,10 @@ at::Tensor solve_passive(at::Tensor conductance_matrix, at::Tensor V_WL,
       V_applied_tensor.index_put_({i, j}, V[n * i + j] - V[m * n + n * i + j]);
     }
   }
+  
+  // Free allocated memory to prevent memory leak
+  free(E_matrix_accessor);
+  
   if (!det_readout_currents) {
     return V_applied_tensor;
   } else {

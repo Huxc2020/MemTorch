@@ -529,6 +529,19 @@ if (!sim_neighbors) {
   cudaSafeCall(cudaFree(r_p_half_arr));
   cudaSafeCall(cudaFree(s_p_half_arr));
   cudaSafeCall(cudaFree(device_matrix_device));
+  
+  // Free host-allocated memory to prevent memory leak
+  free(instruction_array);
+  free(r_n_array);
+  free(r_p_array);
+  free(s_n_array);
+  free(s_p_array);
+  free(r_n_half_array);
+  free(r_p_half_array);
+  free(s_n_half_array);
+  free(s_p_half_array);
+  delete[] neg_voltage_levels;
+  delete[] pos_voltage_levels;
 }
 cudaStreamSynchronize(at::cuda::getCurrentCUDAStream());
 return new_device_matrix;

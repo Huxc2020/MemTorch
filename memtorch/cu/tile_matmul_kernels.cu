@@ -45,7 +45,7 @@ __global__ void tile_matmul_kernel(
       result[transform_2d_index(i, j * mat_b_tiles_shape[2] + ii,
                                 mat_b_shape_back)] += partial_sum[ii];
     }
-    free(&partial_sum);
+    // partial_sum is a stack-allocated Eigen object, no need to free
   }
 }
 
@@ -81,7 +81,7 @@ __global__ void tile_matmul_kernel(
       result[transform_2d_index(i, j * mat_b_tiles_shape[2] + ii,
                                 mat_b_shape_back)] += partial_sum[ii];
     }
-    free(&partial_sum);
+    // partial_sum is a stack-allocated Eigen object, no need to free
   }
 }
 
@@ -92,10 +92,12 @@ at::Tensor tile_matmul(at::Tensor mat_a_tiles, at::Tensor mat_a_tiles_map,
                        int quant_method, float source_resistance,
                        float line_resistance, int cuda_malloc_heap_size) {
   assert(at::cuda::is_available());
-  mat_a_tiles = mat_a_tiles.to(torch::Device("cuda:0"));
-  mat_a_tiles_map = mat_a_tiles_map.to(torch::Device("cuda:0"));
-  mat_b_tiles = mat_b_tiles.to(torch::Device("cuda:0"));
-  mat_b_tiles_map = mat_b_tiles_map.to(torch::Device("cuda:0"));
+  
+  // Ensure all tensors are on GPU and contiguous for better performance
+  mat_a_tiles = mat_a_tiles.to(torch::Device("cuda:0")).contiguous();
+  mat_a_tiles_map = mat_a_tiles_map.to(torch::Device("cuda:0")).contiguous();
+  mat_b_tiles = mat_b_tiles.to(torch::Device("cuda:0")).contiguous();
+  mat_b_tiles_map = mat_b_tiles_map.to(torch::Device("cuda:0")).contiguous();
   cudaDeviceProp prop;
   cudaGetDeviceProperties(&prop, 0);
   int *max_threads_dim = prop.maxThreadsDim;
@@ -183,5 +185,10 @@ at::Tensor tile_matmul(at::Tensor mat_a_tiles, at::Tensor mat_a_tiles_map,
   cudaSafeCall(cudaDeviceSynchronize());
   cudaSafeCall(cudaFree(mat_a_tiles_shape));
   cudaSafeCall(cudaFree(mat_b_tiles_shape));
+  
+  // Free host-allocated memory
+  free(mat_a_tiles_shape_host);
+  free(mat_b_tiles_shape_host);
+  
   return result;
 }
